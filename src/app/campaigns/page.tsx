@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { format, subDays } from 'date-fns'
-import { ChevronUp, ChevronDown, BarChart3 } from 'lucide-react'
+import { ChevronUp, ChevronDown, ChevronRight, BarChart3 } from 'lucide-react'
 import { Header } from '@/components/layout/header'
 import { DateRangePicker } from '@/components/dashboard/date-range-picker'
-import { CampaignDetailModal } from '@/components/campaigns/campaign-detail-modal'
 import { useAccountStore } from '@/hooks/use-account'
 import { CampaignInsight, AlertRule } from '@/types'
 import { formatCurrency, formatNumber, formatPercent, cn } from '@/lib/utils'
@@ -45,19 +45,33 @@ function isCampaignAlerting(campaign: CampaignRow, rules: AlertRule[]): boolean 
   })
 }
 
-export default function CampaignsPage() {
+function useDateRangeFromUrl() {
+  const searchParams = useSearchParams()
+  const from = searchParams.get('dateFrom') || format(subDays(new Date(), 30), 'yyyy-MM-dd')
+  const to = searchParams.get('dateTo') || format(new Date(), 'yyyy-MM-dd')
+  return { from, to }
+}
+
+function CampaignsPageContent() {
+  const router = useRouter()
+  const pathname = usePathname()
   const { selectedAccount } = useAccountStore()
-  const [dateRange, setDateRange] = useState({
-    from: format(subDays(new Date(), 30), 'yyyy-MM-dd'),
-    to: format(new Date(), 'yyyy-MM-dd'),
-  })
+  const urlRange = useDateRangeFromUrl()
+  const [dateRange, setDateRange] = useState(urlRange)
+
+  const setDateRangeAndSyncUrl = useCallback(
+    (range: { from: string; to: string }) => {
+      setDateRange(range)
+      router.replace(`${pathname}?dateFrom=${encodeURIComponent(range.from)}&dateTo=${encodeURIComponent(range.to)}`)
+    },
+    [pathname, router]
+  )
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([])
   const [allInsights, setAllInsights] = useState<CampaignInsight[]>([])
   const [alertRules, setAlertRules] = useState<AlertRule[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [sortKey, setSortKey] = useState<SortKey>('total_spend')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
-  const [selectedCampaign, setSelectedCampaign] = useState<CampaignRow | null>(null)
 
   const fetchData = useCallback(async () => {
     setIsLoading(true)
@@ -78,6 +92,10 @@ export default function CampaignsPage() {
   }, [selectedAccount.account_id, dateRange.from, dateRange.to])
 
   useEffect(() => {
+    setDateRange(urlRange)
+  }, [urlRange.from, urlRange.to])
+
+  useEffect(() => {
     fetchData()
   }, [fetchData])
 
@@ -94,7 +112,7 @@ export default function CampaignsPage() {
     const aVal = a[sortKey]
     const bVal = b[sortKey]
     if (typeof aVal === 'string') {
-      return sortDir === 'asc' ? aVal.localeCompare(bVal as string) : (bVal as string).localeCompare(aVal)
+      return sortDir === 'asc' ? (aVal as string).localeCompare(bVal as string) : (bVal as string).localeCompare(aVal as string)
     }
     return sortDir === 'asc' ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number)
   })
@@ -105,6 +123,8 @@ export default function CampaignsPage() {
       ? <ChevronUp size={12} className="text-blue-400" />
       : <ChevronDown size={12} className="text-blue-400" />
   }
+
+  const query = `?dateFrom=${encodeURIComponent(dateRange.from)}&dateTo=${encodeURIComponent(dateRange.to)}`
 
   const columns: { key: SortKey; label: string }[] = [
     { key: 'campaign_name', label: 'Кампания' },
@@ -122,12 +142,12 @@ export default function CampaignsPage() {
       <Header title="Кампании" />
 
       <div className="flex-1 p-6 space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h2 className="text-xl font-semibold text-white">{selectedAccount.account_name}</h2>
             <p className="text-sm text-slate-500 mt-0.5">{campaigns.length} кампаний</p>
           </div>
-          <DateRangePicker value={dateRange} onChange={setDateRange} />
+          <DateRangePicker value={dateRange} onChange={setDateRangeAndSyncUrl} />
         </div>
 
         <div className="glass-card rounded-xl overflow-hidden">
@@ -140,13 +160,15 @@ export default function CampaignsPage() {
                       key={col.key}
                       onClick={() => toggleSort(col.key)}
                       className="px-4 py-3 text-left cursor-pointer select-none transition-colors"
-                      style={{ color: sortKey === col.key ? '#3b82f6' : '#64748b' }}>
+                      style={{ color: sortKey === col.key ? '#3b82f6' : '#64748b' }}
+                    >
                       <div className="flex items-center gap-1 whitespace-nowrap">
                         {col.label}
                         <SortIcon k={col.key} />
                       </div>
                     </th>
                   ))}
+                  <th className="px-4 py-3 w-10" aria-hidden />
                 </tr>
               </thead>
               <tbody>
@@ -158,10 +180,13 @@ export default function CampaignsPage() {
                           <div className="h-4 rounded animate-pulse" style={{ background: 'rgba(255,255,255,0.05)' }} />
                         </td>
                       ))}
+                      <td className="px-4 py-3" />
                     </tr>
                   ))
                   : sorted.map((campaign, i) => {
                     const isAlerting = isCampaignAlerting(campaign, alertRules)
+                    const campaignId = campaign.campaign_id ?? encodeURIComponent(campaign.campaign_name)
+                    const href = `/campaigns/${campaignId}${query}`
 
                     return (
                       <motion.tr
@@ -169,8 +194,11 @@ export default function CampaignsPage() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: i * 0.03 }}
-                        onClick={() => setSelectedCampaign(campaign)}
-                        className="cursor-pointer transition-colors"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => router.push(href)}
+                        onKeyDown={(e) => e.key === 'Enter' && router.push(href)}
+                        className="cursor-pointer transition-colors duration-150 group"
                         style={{
                           borderBottom: '1px solid rgba(255,255,255,0.03)',
                           background: isAlerting ? 'rgba(239, 68, 68, 0.04)' : 'transparent',
@@ -191,10 +219,12 @@ export default function CampaignsPage() {
                             {isAlerting && (
                               <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#ef4444' }} />
                             )}
-                            <span className={cn(
-                              'font-medium max-w-[260px] truncate',
-                              isAlerting ? 'text-red-300' : 'text-slate-200'
-                            )}>
+                            <span
+                              className={cn(
+                                'font-medium max-w-[260px] truncate',
+                                isAlerting ? 'text-red-300' : 'text-slate-200'
+                              )}
+                            >
                               {campaign.campaign_name}
                             </span>
                           </div>
@@ -206,12 +236,26 @@ export default function CampaignsPage() {
                         <td className="px-4 py-3 font-mono text-slate-400">{formatPercent(campaign.avg_ctr)}</td>
                         <td className="px-4 py-3 font-mono text-slate-400">{formatCurrency(campaign.avg_cpc)}</td>
                         <td className="px-4 py-3 font-mono">
-                          <span className={cn(
-                            alertRules.some((r) => r.is_active && r.metric === 'cost_per_result' && (r.operator === 'above' ? campaign.avg_cost_per_result > r.threshold : campaign.avg_cost_per_result < r.threshold))
-                              ? 'text-red-400'
-                              : 'text-slate-400'
-                          )}>
+                          <span
+                            className={cn(
+                              alertRules.some(
+                                (r) =>
+                                  r.is_active &&
+                                  r.metric === 'cost_per_result' &&
+                                  (r.operator === 'above'
+                                    ? campaign.avg_cost_per_result > r.threshold
+                                    : campaign.avg_cost_per_result < r.threshold)
+                              )
+                                ? 'text-red-400'
+                                : 'text-slate-400'
+                            )}
+                          >
                             {formatCurrency(campaign.avg_cost_per_result)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 w-10">
+                          <span className="inline-flex text-slate-500 group-hover:text-white transition-colors">
+                            <ChevronRight size={16} />
                           </span>
                         </td>
                       </motion.tr>
@@ -221,26 +265,29 @@ export default function CampaignsPage() {
             </table>
 
             {!isLoading && campaigns.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="min-h-[300px] flex flex-col items-center justify-center py-16 text-center text-slate-400">
                 <BarChart3 size={40} className="text-slate-700 mb-3" />
-                <p className="text-slate-400">Нет данных за выбранный период</p>
+                <p>Нет данных за выбранный период</p>
               </div>
             )}
           </div>
         </div>
       </div>
-
-      {selectedCampaign && (
-        <CampaignDetailModal
-          campaign={selectedCampaign}
-          accountId={selectedAccount.account_id}
-          accountName={selectedAccount.account_name}
-          dateFrom={dateRange.from}
-          dateTo={dateRange.to}
-          dailyInsights={allInsights}
-          onClose={() => setSelectedCampaign(null)}
-        />
-      )}
     </div>
+  )
+}
+
+export default function CampaignsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col min-h-screen">
+        <Header title="Кампании" />
+        <div className="flex-1 p-6 flex items-center justify-center">
+          <div className="text-slate-500">Загрузка…</div>
+        </div>
+      </div>
+    }>
+      <CampaignsPageContent />
+    </Suspense>
   )
 }

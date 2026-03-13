@@ -356,3 +356,104 @@ export async function fetchMetaHourlyInsights(
   }
   return allRows
 }
+
+// --- Ads (live from Meta API) ---
+
+export interface MetaAdCreative {
+  id: string
+  title?: string
+  body?: string
+  thumbnail_url?: string
+  image_url?: string
+}
+
+export interface MetaAdNode {
+  id: string
+  name: string
+  status: string
+  creative?: MetaAdCreative
+}
+
+export interface MetaAdsResponse {
+  data: MetaAdNode[]
+  paging?: { next?: string }
+}
+
+export async function fetchMetaAds(adsetId: string): Promise<MetaAdNode[]> {
+  const fields = 'id,name,status,creative{id,title,body,thumbnail_url,image_url}'
+  const all: MetaAdNode[] = []
+  let url: string | undefined = `${META_GRAPH_URL}/${adsetId}/ads?fields=${fields}&access_token=${ACCESS_TOKEN}`
+
+  while (url) {
+    const res = await fetch(url)
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err?.error?.message || `HTTP ${res.status}`)
+    }
+    const data: MetaAdsResponse = await res.json()
+    all.push(...(data.data || []))
+    url = data.paging?.next
+    if (url) await sleep(300)
+  }
+  return all
+}
+
+export interface MetaAdInsightRow {
+  ad_id: string
+  date_start: string
+  spend: string
+  impressions: string
+  clicks: string
+  cpm: string
+  cpc: string
+  ctr: string
+}
+
+export interface MetaAdInsightsResponse {
+  data: MetaAdInsightRow[]
+}
+
+export async function fetchMetaAdInsights(
+  adId: string,
+  dateFrom?: string,
+  dateTo?: string
+): Promise<MetaAdInsightRow[]> {
+  const today = new Date()
+  const since = dateFrom || format(subDays(today, 30), 'yyyy-MM-dd')
+  const until = dateTo || format(today, 'yyyy-MM-dd')
+  const timeRange = JSON.stringify({ since, until })
+  const fields = 'spend,impressions,clicks,cpm,cpc,ctr'
+  const url = `${META_GRAPH_URL}/${adId}/insights?fields=${fields}&time_range=${encodeURIComponent(timeRange)}&access_token=${ACCESS_TOKEN}`
+
+  const res = await fetch(url)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error?.message || `HTTP ${res.status}`)
+  }
+  const data: MetaAdInsightsResponse = await res.json()
+  return data.data || []
+}
+
+export interface MetaAdPreviewNode {
+  body?: string
+}
+
+export interface MetaAdPreviewResponse {
+  data?: MetaAdPreviewNode[]
+}
+
+export async function fetchMetaAdPreview(
+  adId: string,
+  adFormat: string = 'MOBILE_FEED_STANDARD'
+): Promise<string> {
+  const url = `${META_GRAPH_URL}/${adId}/previews?ad_format=${encodeURIComponent(adFormat)}&access_token=${ACCESS_TOKEN}`
+
+  const res = await fetch(url)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error?.message || `HTTP ${res.status}`)
+  }
+  const data: MetaAdPreviewResponse = await res.json()
+  const first = data.data?.[0]
+  return first?.body ?? ''
+}

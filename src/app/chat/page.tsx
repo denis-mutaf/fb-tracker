@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Send, Bot, User, Sparkles } from 'lucide-react'
 import { Header } from '@/components/layout/header'
@@ -49,7 +51,29 @@ function MessageBubble({ message, isNew }: { message: ChatMessage; isNew?: boole
             : 'rgba(255,255,255,0.05)',
           border: `1px solid ${isUser ? 'rgba(59,130,246,0.3)' : 'rgba(255,255,255,0.06)'}`,
         }}>
-        <div className="whitespace-pre-wrap">{message.content}</div>
+        {message.role === 'assistant' ? (
+          <div className="prose prose-invert prose-sm max-w-none">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                table: ({ children }) => (
+                  <div className="overflow-x-auto my-4">
+                    <table className="w-full text-sm border-collapse">{children}</table>
+                  </div>
+                ),
+                th: ({ children }) => (
+                  <th className="border border-white/10 px-3 py-2 text-left font-semibold bg-white/5">{children}</th>
+                ),
+                td: ({ children }) => (
+                  <td className="border border-white/10 px-3 py-2">{children}</td>
+                ),
+              }}>
+              {message.content}
+            </ReactMarkdown>
+          </div>
+        ) : (
+          <div className="whitespace-pre-wrap">{message.content}</div>
+        )}
       </div>
     </motion.div>
   )

@@ -13,7 +13,8 @@
 | UI | shadcn/ui, Radix UI |
 | Графики | Recharts |
 | БД | Supabase (PostgreSQL) |
-| AI | OpenAI API (GPT-4o) |
+| AI | Anthropic Claude API (claude-sonnet-4-6) |
+| Markdown (AI) | react-markdown, remark-gfm, @tailwindcss/typography |
 | Состояние | Zustand (persist) |
 | Анимации | Framer Motion |
 | Деплой | Vercel |
@@ -29,7 +30,11 @@ leadleap/
 │   │   ├── layout.tsx
 │   │   ├── page.tsx                 # Dashboard
 │   │   ├── globals.css
-│   │   ├── campaigns/page.tsx       # Кампании + модал с деталями (6 вкладок)
+│   │   ├── campaigns/
+│   │   │   ├── layout.tsx           # AnimatePresence + motion: переходы страниц (opacity, y)
+│   │   │   ├── page.tsx             # Список кампаний (таблица, переход в drill-down)
+│   │   │   ├── [campaignId]/page.tsx    # Детали кампании: метрики, график, таблица адсетов
+│   │   │   └── [campaignId]/[adsetId]/page.tsx  # Детали адсета: метрики, графики, вкладки, объявления (список)
 │   │   ├── chat/page.tsx            # AI Chat (streaming)
 │   │   ├── settings/page.tsx        # Настройки, алерты, токен
 │   │   └── api/
@@ -50,7 +55,7 @@ leadleap/
 │   │           └── hourly/route.ts        # GET — по часам
 │   ├── components/
 │   │   ├── layout/        # Sidebar, Header
-│   │   ├── campaigns/     # CampaignDetailModal (6 вкладок: обзор, адсеты, демография, плейсменты, гео, по часам)
+│   │   ├── campaigns/     # Breadcrumbs, таблицы кампаний/адсетов (drill-down, без модала)
 │   │   ├── dashboard/     # MetricCard, Charts, DateRangePicker, AiInsightsBlock
 │   │   └── ui/            # shadcn: button, card, table, tabs, popover, etc.
 │   ├── lib/
@@ -64,7 +69,8 @@ leadleap/
 ├── supabase/
 │   └── migrations/
 │       ├── 20250307000000_create_meta_adset_insights.sql
-│       └── 20250307100000_create_meta_breakdown_tables.sql
+│       ├── 20250307100000_create_meta_breakdown_tables.sql
+│       └── 20250313100000_add_reach_frequency_video_columns.sql
 ├── .env.local
 ├── vercel.json            # Cron: sync-all ежедневно 06:00 UTC
 ├── next.config.ts
@@ -85,7 +91,7 @@ leadleap/
 | `META_ACCESS_TOKEN` | Long-lived токен доступа Meta Marketing API |
 | `META_APP_ID` | ID приложения Meta |
 | `META_APP_SECRET` | Секрет приложения Meta (опционально) |
-| `OPENAI_API_KEY` | Ключ OpenAI для GPT-4o |
+| `ANTHROPIC_API_KEY` | Ключ Anthropic для Claude API |
 | `CRON_SECRET` | Секрет для защиты `/api/meta/sync-all` при вызове cron |
 | `NEXT_PUBLIC_APP_URL` | Полный URL приложения (для sync-all при деплое) |
 
@@ -96,8 +102,8 @@ leadleap/
 ### Таблицы
 
 - **meta_ad_accounts** — рекламные аккаунты Meta (`account_id`, `account_name`, `account_currency`, `is_active`).
-- **meta_campaign_insights** — инсайты по кампаниям по дням (`account_id`, `campaign_id`, `campaign_name`, `date`, `spend`, `impressions`, `clicks`, `results`, `cost_per_result`, `cpm`, `cpc`, `ctr`). Unique: `(account_id, campaign_name, date)`.
-- **meta_adset_insights** — инсайты по ad set по дням. Unique: `(account_id, adset_name, campaign_name, date)`.
+- **meta_campaign_insights** — инсайты по кампаниям по дням (`account_id`, `campaign_id`, `campaign_name`, `date`, `spend`, `impressions`, `clicks`, `results`, `cost_per_result`, `cpm`, `cpc`, `ctr`, `reach`, `frequency`, `video_p25_watched`, `video_p50_watched`, `video_p75_watched`, `video_p100_watched`, `video_thruplay`). Unique: `(account_id, campaign_name, date)`.
+- **meta_adset_insights** — инсайты по ad set по дням (те же метрики + reach, frequency, video_*). Unique: `(account_id, adset_name, campaign_name, date)`.
 - **meta_demographic_insights** — разбивка по возрасту и полу. Unique: `(account_id, campaign_name, date, age, gender)`.
 - **meta_placement_insights** — по платформе и позиции. Unique: `(account_id, campaign_name, date, publisher_platform, platform_position)`.
 - **meta_geo_insights** — по стране и региону. Unique: `(account_id, campaign_name, date, country, region)`.
@@ -105,7 +111,7 @@ leadleap/
 - **alert_rules** — пороговые правила для алертов (`account_id`, `metric`, `operator`, `threshold`, `label`, `is_active`).
 - **ai_reports** — сохранённые AI-отчёты (`account_id`, `report_date`, `report_text`, `alerts` jsonb).
 
-Миграции лежат в `supabase/migrations/`. Таблицы `meta_ad_accounts` и `meta_campaign_insights` создаются отдельно (см. раздел SQL в настройках приложения или README).
+Миграции лежат в `supabase/migrations/`. Третья миграция добавляет в `meta_campaign_insights` и `meta_adset_insights` колонки `reach`, `frequency`, `video_p25_watched`, `video_p50_watched`, `video_p75_watched`, `video_p100_watched`, `video_thruplay`. Таблицы `meta_ad_accounts` и `meta_campaign_insights` (базовые) создаются отдельно при необходимости (см. раздел SQL в настройках приложения или README).
 
 ---
 
@@ -117,10 +123,12 @@ leadleap/
 |-------|------|----------|
 | POST | `/api/meta/sync` | Синхронизация одного аккаунта: кампании, ad sets, демография, плейсменты, гео, по часам. Body: `{ accountId, dateFrom?, dateTo? }`. Возврат: `{ success, rows_synced }` или `{ success: false, error, rows_synced: 0 }` (status 200 при ошибке Meta). |
 | POST | `/api/meta/sync-all` | Синк всех активных аккаунтов из `meta_ad_accounts`. Защита: `Authorization: Bearer CRON_SECRET` или Vercel cron. |
-| POST | `/api/meta/sync-accounts` | Загрузка списка аккаунтов из Meta `me/adaccounts`, upsert в `meta_ad_accounts`. Возврат: `{ success, accounts_synced }`. |
+| POST | `/api/meta/sync-accounts` | Загрузка списка аккаунтов из Meta `me/adaccounts`, upsert в `meta_ad_accounts`. Перед upsert `account_id` нормализуется: при отсутствии префикса `act_` он добавляется. Возврат: `{ success, accounts_synced }`. |
 | GET | `/api/meta/accounts` | Список активных аккаунтов из БД. |
-| GET | `/api/meta/insights` | Инсайты. Query: `accountId`, `dateFrom`, `dateTo`, `groupBy` (day \| campaign). |
-| GET | `/api/meta/adsets` | Ad sets по кампании. Query: `accountId`, `campaignName`, `dateFrom`, `dateTo`. |
+| GET | `/api/meta/insights` | Инсайты. Query: `accountId`, `dateFrom`, `dateTo`, `groupBy` (day \| campaign), `campaignId` (опционально). |
+| GET | `/api/meta/adsets` | Ad sets. Query: `accountId`, `campaignId` или `campaignName`, `dateFrom`, `dateTo`, `groupBy=adset` (агрегат), `adsetId`/`adsetName` (опционально). |
+| GET | `/api/meta/ads` | Объявления по адсету (live из Meta API). Query: `adsetId`, `accountId`, `dateFrom`, `dateTo`. |
+| GET | `/api/meta/preview` | Превью объявления (iframe HTML). Query: `adId`, `adFormat` (по умолчанию MOBILE_FEED_STANDARD). |
 | GET | `/api/meta/demographics` | Демография. Query: `accountId`, `dateFrom`, `dateTo`, `campaignName` (опционально, через запятую). |
 | GET | `/api/meta/placements` | Плейсменты. Те же параметры. |
 | GET | `/api/meta/geo` | География. Те же параметры. |
@@ -131,7 +139,7 @@ leadleap/
 | Метод | Путь | Описание |
 |-------|------|----------|
 | POST | `/api/ai/analyze` | Генерация AI-отчёта. Body: `{ accountId, dateFrom, dateTo, question? }`. В промпт подставляются кампании, алерты, демография, плейсменты, гео. Результат сохраняется в `ai_reports`. |
-| POST | `/api/ai/chat` | Стриминг-чат. Body: `{ accountId, messages }`. Ответ — SSE stream. |
+| POST | `/api/ai/chat` | Стриминг-чат. Body: `{ accountId, messages }`. В системный промпт подставляются данные кампаний, алерты, адсеты, демография (топ 20 по расходу), плейсменты, гео (топ 10), плюс инструкция учитывать демографию, плейсменты, географию и частоту (frequency > 3 = выгорание). Ответ — SSE stream. |
 
 ### Alerts
 
@@ -144,17 +152,21 @@ leadleap/
 
 ## Страницы и функциональность
 
-- **Dashboard (`/`)** — сводные метрики (расход, показы, клики, результаты, CTR, CPC, цена за результат), сравнение с предыдущим периодом, графики (расход по дням, CPC/CPR, результаты по кампаниям, показы/клики), блок AI-аналитики (запрос отчёта, сработавшие алерты).
-- **Кампании (`/campaigns`)** — таблица кампаний с сортировкой и подсветкой по алертам. Клик по строке открывает полноэкранный модал с детальной аналитикой кампании (6 вкладок: Обзор, Адсеты, Демография, Плейсменты, География, По часам). Данные вкладок загружаются лениво при первом переходе.
-- **AI Chat (`/chat`)** — чат с GPT-4o по данным аккаунта (последние 30 дней + алерты), стриминг ответов, примеры вопросов.
+- **Dashboard (`/`)** — сводные метрики (расход, показы, клики, результаты, CTR, CPC, цена за результат), сравнение с предыдущим периодом, графики (расход по дням, CPC/CPR, результаты по кампаниям, показы/клики), блок AI-аналитики (запрос отчёта от Claude, сработавшие алерты). Текст отчёта рендерится как Markdown (react-markdown + remark-gfm): заголовки, списки, таблицы, блоки кода; стили — prose (Tailwind Typography).
+- **Кампании** — drill-down навигация как в Meta Ads Manager. Переходы между страницами анимированы (Framer Motion: layout с AnimatePresence, opacity + y). Период хранится в URL (`?dateFrom=…&dateTo=…`).
+  - **`/campaigns`** — таблица кампаний (сортировка, алерты, период и аккаунт в URL). Клик по строке → `/campaigns/[campaignId]`. Справа у каждой строки — стрелка (→). Пустое состояние и строки таблицы с `transition-colors duration-150`.
+  - **`/campaigns/[campaignId]`** — хлебные крошки (Кампании > {название}), заголовок, период. Метрики: расход, охват, показы, частота, клики, результаты, CTR, CPC, цена/результат. График расхода по дням. Таблица адсетов (частота >3 подсвечена красным; клик → адсет). При загрузке — скелетоны (карточки метрик, 2 графика, 5 строк таблицы). Пустые состояния с `min-h-[300px]`.
+  - **`/campaigns/[campaignId]/[adsetId]`** — хлебные крошки, заголовок адсета, период. Метрики и графики: расход по дням, частота по дням (линия «Выгорание» при y=3). При наличии видео — воронка 25%/50%/75%/100%/ThruPlay. Вкладки Демография / Плейсменты / По часам с анимацией смены контента (`key={activeTab}`, opacity). Блок «Объявления» — компактный список: строка = превью 60×60, название, статус (ACTIVE/PAUSED), метрики inline (расход, показы, CTR, CPC), кнопка «Превью» (модал с iframe из Meta). При загрузке — скелетоны; пустые вкладки и списки с `min-h-[300px]`.
+- **AI Chat (`/chat`)** — чат с Claude по данным аккаунта: кампании, алерты, адсеты, демография (топ 20), плейсменты, гео (топ 10) за последние 30 дней; стриминг ответов, примеры вопросов. Сообщения ассистента рендерятся как Markdown (react-markdown + remark-gfm), таблицы — кастомные компоненты (overflow-x-auto, границы).
 - **Настройки (`/settings`)** — индикатор срока действия Meta Access Token, CRUD правил алертов (метрика, оператор, порог, описание), пример SQL для создания таблиц.
 
 ---
 
 ## Логика синхронизации (Meta API)
 
-- **Кампании:** `GET /{accountId}/insights` с `level=campaign`, `time_increment=1`, пагинация по `paging.next`, задержка 300 ms между запросами, при 429 — exponential backoff.
-- **Ad sets:** то же с `level=adset`, поля `adset_id`, `adset_name`.
+- **Кампании:** `GET /{accountId}/insights` с `level=campaign`, `time_increment=1`, поля включают `reach`, `frequency`, `video_p25_watched_actions`, `video_p50_watched_actions`, `video_p75_watched_actions`, `video_p100_watched_actions`, `video_thruplay_watched_actions`. Пагинация по `paging.next`, задержка 300 ms между запросами, при 429 — exponential backoff.
+- **Ad sets:** то же с `level=adset`, поля `adset_id`, `adset_name` и те же reach/frequency/video_*.
+- **Video-поля:** приходят как массивы actions `[{ action_type, value }]`; в БД пишется число через `extractActionValue(actions)` — `parseInt(actions?.[0]?.value) || 0`.
 - **Breakdowns:** те же поля + параметр `breakdowns`: `age,gender` \| `publisher_platform,platform_position` \| `country,region` \| `hourly_stats_aggregated_by_advertiser_time_zone`. Четыре типа breakdown-синка выполняются параллельно через `Promise.allSettled`; ошибка одного не отменяет остальные.
 - **accountId** в запросах к Meta нормализуется: при отсутствии префикса `act_` он добавляется.
 - **Результаты (results):** из поля `actions` выбираются типы lead, complete_registration, purchase и др.; при отсутствии — сумма по всем actions.
@@ -170,9 +182,9 @@ leadleap/
 
 ## Типы (основные)
 
-- `MetaAdAccount`, `CampaignInsight`, `AlertRule`, `AiReport`, `AlertFired`
+- `MetaAdAccount`, `CampaignInsight` (опционально `reach`, `frequency`, `video_p25_watched`, …, `video_thruplay`), `AlertRule`, `AiReport`, `AlertFired`
 - `ChatMessage`, `MetricKey`, `METRIC_LABELS`
-- В `lib/meta-api.ts`: `MetaInsightRow`, `MetaAdsetInsightRow`, `MetaBreakdownRow` для ответов Meta API.
+- В `lib/meta-api.ts`: `MetaInsightRow`, `MetaAdsetInsightRow`, `MetaBreakdownRow`; для объявлений и превью: `MetaAdNode`, `MetaAdCreative`, `MetaAdInsightRow`, `fetchMetaAds`, `fetchMetaAdInsights`, `fetchMetaAdPreview`. В `api/meta/sync`: `extractActionValue(actions)` для video-actions. В `api/meta/adsets/route`: тип `AdsetAggregateRow` для агрегата по адсету.
 
 ---
 

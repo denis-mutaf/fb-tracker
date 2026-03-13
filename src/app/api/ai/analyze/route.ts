@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import OpenAI from 'openai'
+import Anthropic from '@anthropic-ai/sdk'
 import { supabaseAdmin } from '@/lib/supabase'
 import { AlertRule, CampaignInsight, AlertFired } from '@/types'
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 function checkAlerts(insights: CampaignInsight[], rules: AlertRule[]): AlertFired[] {
   const fired: AlertFired[] = []
@@ -124,13 +124,14 @@ ${question ? `6. Ответь на вопрос пользователя: "${que
 Используй эмодзи для визуального выделения (🟢 норма, 🔴 проблема, ⚠️ предупреждение).
 Используй MCP Сервер Supabase, проект FB Tracker.`
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [{ role: 'user', content: prompt }],
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
       max_tokens: 2000,
+      messages: [{ role: 'user', content: prompt }],
     })
-
-    const reportText = completion.choices[0].message.content || ''
+    const firstBlock = message.content[0]
+    const reportText =
+      firstBlock && firstBlock.type === 'text' ? firstBlock.text : ''
 
     await supabaseAdmin.from('ai_reports').insert({
       account_id: accountId,

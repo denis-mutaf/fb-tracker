@@ -4,6 +4,12 @@ import { supabaseAdmin } from '@/lib/supabase'
 const META_GRAPH_URL = 'https://graph.facebook.com/v25.0'
 const FIELDS = 'account_id,name,account_currency'
 
+/** Ensure account_id has act_ prefix for consistent storage (Meta may return numeric id only). */
+function normalizeAccountId(accountId: string): string {
+  const raw = String(accountId ?? '').trim()
+  return raw.startsWith('act_') ? raw : `act_${raw}`
+}
+
 export async function POST() {
   try {
     const token = process.env.META_ACCESS_TOKEN
@@ -23,7 +29,7 @@ export async function POST() {
     const raw = json.data ?? []
     const accounts = raw.map(
       (row: { account_id: string; name: string; account_currency?: string }) => ({
-        account_id: row.account_id,
+        account_id: normalizeAccountId(row.account_id),
         account_name: row.name ?? row.account_id,
         account_currency: row.account_currency ?? 'USD',
         is_active: true,

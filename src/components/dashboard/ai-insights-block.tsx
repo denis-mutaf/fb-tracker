@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Brain, RefreshCw, AlertTriangle, ChevronRight, CheckCircle } from 'lucide-react'
 import { useAccountStore } from '@/hooks/use-account'
@@ -155,8 +157,24 @@ export function AiInsightsBlock({ dateFrom, dateTo }: AiInsightsBlockProps) {
               </div>
             )}
 
-            <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
-              {report}
+            <div className="prose prose-invert prose-sm max-w-none text-slate-300">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  table: ({ children }) => (
+                    <div className="overflow-x-auto my-4">
+                      <table className="w-full text-sm border-collapse">{children}</table>
+                    </div>
+                  ),
+                  th: ({ children }) => (
+                    <th className="border border-white/10 px-3 py-2 text-left font-semibold bg-white/5">{children}</th>
+                  ),
+                  td: ({ children }) => (
+                    <td className="border border-white/10 px-3 py-2">{children}</td>
+                  ),
+                }}>
+                {report}
+              </ReactMarkdown>
             </div>
           </motion.div>
         )}

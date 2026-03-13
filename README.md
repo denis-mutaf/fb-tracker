@@ -8,7 +8,7 @@ AI-powered дашборд для трекинга рекламных кампа�
 - **Tailwind CSS** + **shadcn/ui**
 - **Recharts** — интерактивные графики
 - **Supabase** — PostgreSQL база данных
-- **OpenAI GPT-4o** — AI анализ и чат
+- **Anthropic Claude (claude-sonnet-4-6)** — AI анализ и чат
 - **Framer Motion** — анимации
 - **Zustand** — управление состоянием
 
@@ -33,7 +33,7 @@ META_ACCESS_TOKEN=EAAxxxxx
 META_APP_ID=1640261420505969
 META_APP_SECRET=xxx
 
-OPENAI_API_KEY=sk-xxx
+ANTHROPIC_API_KEY=sk-ant-xxx
 
 CRON_SECRET=your-secret
 NEXT_PUBLIC_APP_URL=https://your-domain.vercel.app

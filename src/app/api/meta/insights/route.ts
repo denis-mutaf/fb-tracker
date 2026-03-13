@@ -21,6 +21,15 @@ export async function GET(req: NextRequest) {
   if (dateFrom) query = query.gte('date', dateFrom)
   if (dateTo) query = query.lte('date', dateTo)
 
+  const campaignId = searchParams.get('campaignId')
+  if (campaignId) {
+    if (/^\d+$/.test(campaignId)) {
+      query = query.eq('campaign_id', campaignId)
+    } else {
+      query = query.eq('campaign_name', decodeURIComponent(campaignId))
+    }
+  }
+
   const { data, error } = await query
 
   console.log('Supabase error:', error)

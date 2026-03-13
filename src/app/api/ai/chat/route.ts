@@ -1,9 +1,9 @@
 import { NextRequest } from 'next/server'
-import OpenAI from 'openai'
+import Anthropic from '@anthropic-ai/sdk'
 import { supabaseAdmin } from '@/lib/supabase'
 import { subDays, format } from 'date-fns'
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,7 +13,14 @@ export async function POST(req: NextRequest) {
     const dateFrom = format(subDays(today, 30), 'yyyy-MM-dd')
     const dateTo = format(today, 'yyyy-MM-dd')
 
-    const [insightsRes, alertsRes] = await Promise.all([
+    const [
+      insightsRes,
+      alertsRes,
+      adsetRes,
+      demographicRes,
+      placementRes,
+      geoRes,
+    ] = await Promise.all([
       supabaseAdmin
         .from('meta_campaign_insights')
         .select('*')
@@ -22,6 +29,36 @@ export async function POST(req: NextRequest) {
         .lte('date', dateTo)
         .order('date', { ascending: true }),
       supabaseAdmin.from('alert_rules').select('*').eq('account_id', accountId),
+      supabaseAdmin
+        .from('meta_adset_insights')
+        .select('*')
+        .eq('account_id', accountId)
+        .gte('date', dateFrom)
+        .lte('date', dateTo)
+        .order('date', { ascending: true }),
+      supabaseAdmin
+        .from('meta_demographic_insights')
+        .select('*')
+        .eq('account_id', accountId)
+        .gte('date', dateFrom)
+        .lte('date', dateTo)
+        .order('spend', { ascending: false })
+        .limit(20),
+      supabaseAdmin
+        .from('meta_placement_insights')
+        .select('*')
+        .eq('account_id', accountId)
+        .gte('date', dateFrom)
+        .lte('date', dateTo)
+        .order('date', { ascending: true }),
+      supabaseAdmin
+        .from('meta_geo_insights')
+        .select('*')
+        .eq('account_id', accountId)
+        .gte('date', dateFrom)
+        .lte('date', dateTo)
+        .order('spend', { ascending: false })
+        .limit(10),
     ])
 
     const systemPrompt = `Ты — AI-ассистент для анализа рекламных кампаний Meta (Facebook/Instagram Ads).
@@ -33,17 +70,28 @@ ${JSON.stringify(insightsRes.data || [], null, 2)}
 ПРАВИЛА АЛЕРТОВ:
 ${JSON.stringify(alertsRes.data || [], null, 2)}
 
+ДАННЫЕ ПО АДСЕТАМ:
+${JSON.stringify(adsetRes.data || [], null, 2)}
+
+ДЕМОГРАФИЯ (топ по расходу):
+${JSON.stringify(demographicRes.data || [], null, 2)}
+
+ПЛЕЙСМЕНТЫ:
+${JSON.stringify(placementRes.data || [], null, 2)}
+
+ГЕОГРАФИЯ (топ 10):
+${JSON.stringify(geoRes.data || [], null, 2)}
+
+При анализе учитывай демографию (какой возраст/пол конвертирует лучше), плейсменты (какая платформа эффективнее), географию (откуда приходят результаты), и частоту показов (frequency > 3.0 = выгорание аудитории).
+
 Отвечай на русском языке, кратко и по делу. Используй эмодзи для наглядности.
 При необходимости ссылайся на конкретные кампании и даты из данных.`
 
-    const stream = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        ...messages,
-      ],
-      stream: true,
+    const stream = anthropic.messages.stream({
+      model: 'claude-sonnet-4-6',
       max_tokens: 1500,
+      system: systemPrompt,
+      messages: messages as { role: 'user' | 'assistant'; content: string }[],
     })
 
     const encoder = new TextEncoder()
@@ -51,9 +99,14 @@ ${JSON.stringify(alertsRes.data || [], null, 2)}
     const readable = new ReadableStream({
       async start(controller) {
         for await (const chunk of stream) {
-          const text = chunk.choices[0]?.delta?.content || ''
-          if (text) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
+          if (
+            chunk.type === 'content_block_delta' &&
+            chunk.delta.type === 'text_delta'
+          ) {
+            const text = chunk.delta.text
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ text })}\n\n`)
+            )
           }
         }
         controller.enqueue(encoder.encode('data: [DONE]\n\n'))
