@@ -1,0 +1,20 @@
+CREATE TABLE meta_adset_insights (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  account_id text NOT NULL REFERENCES meta_ad_accounts(account_id),
+  campaign_id text,
+  campaign_name text NOT NULL,
+  adset_id text,
+  adset_name text NOT NULL,
+  date date NOT NULL,
+  spend numeric DEFAULT 0,
+  impressions integer DEFAULT 0,
+  clicks integer DEFAULT 0,
+  results integer DEFAULT 0,
+  cost_per_result numeric DEFAULT 0,
+  cpm numeric DEFAULT 0,
+  cpc numeric DEFAULT 0,
+  ctr numeric DEFAULT 0,
+  account_currency text DEFAULT 'USD',
+  fetched_at timestamptz DEFAULT now(),
+  UNIQUE(account_id, adset_name, campaign_name, date)
+);

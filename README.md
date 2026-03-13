@@ -1,36 +1,94 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LeadLeap — Meta Ads Dashboard
 
-## Getting Started
+AI-powered дашборд для трекинга рекламных кампаний Meta (Facebook/Instagram).
 
-First, run the development server:
+## Стек
+
+- **Next.js 16** (App Router, TypeScript)
+- **Tailwind CSS** + **shadcn/ui**
+- **Recharts** — интерактивные графики
+- **Supabase** — PostgreSQL база данных
+- **OpenAI GPT-4o** — AI анализ и чат
+- **Framer Motion** — анимации
+- **Zustand** — управление состоянием
+
+## Быстрый старт
+
+### 1. Установка зависимостей
+
+```bash
+npm install
+```
+
+### 2. Переменные окружения
+
+Скопируй `.env.local` и заполни значения:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+
+META_ACCESS_TOKEN=EAAxxxxx
+META_APP_ID=1640261420505969
+META_APP_SECRET=xxx
+
+OPENAI_API_KEY=sk-xxx
+
+CRON_SECRET=your-secret
+NEXT_PUBLIC_APP_URL=https://your-domain.vercel.app
+```
+
+### 3. База данных (Supabase)
+
+Выполни SQL из раздела **Settings → SQL** в приложении, или перейди в Supabase SQL Editor и вставь схему.
+
+### 4. Запуск
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Открой [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Структура проекта
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+src/
+├── app/
+│   ├── page.tsx              # Dashboard
+│   ├── campaigns/page.tsx    # Кампании
+│   ├── chat/page.tsx         # AI Chat
+│   ├── settings/page.tsx     # Настройки
+│   └── api/
+│       ├── meta/sync/        # POST — синхронизация с Meta API
+│       ├── meta/sync-all/    # POST — синхронизация всех аккаунтов
+│       ├── meta/insights/    # GET — данные из Supabase
+│       ├── ai/analyze/       # POST — AI анализ
+│       ├── ai/chat/          # POST — стриминг чат
+│       └── alerts/           # GET/POST — правила алертов
+├── components/
+│   ├── layout/               # Sidebar, Header
+│   └── dashboard/            # Charts, MetricCard, DateRangePicker, AiInsightsBlock
+├── lib/
+│   ├── supabase.ts           # Supabase клиенты
+│   ├── meta-api.ts           # Meta Graph API
+│   └── utils.ts              # Утилиты форматирования
+├── hooks/
+│   └── use-account.ts        # Zustand стор для выбранного аккаунта
+└── types/
+    └── index.ts              # TypeScript типы
+```
 
-## Learn More
+## Деплой на Vercel
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+vercel deploy
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Cron автоматически синхронизирует данные каждый день в 06:00 UTC.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Аккаунты
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Anver Textil** — `act_1478794733204244`
+- **Denis Cosarnii** — `act_1160997135477649`
