@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import {
   fetchMetaInsights,
   fetchMetaAdsetInsights,
+  fetchMetaAdInsights,
   fetchMetaDemographicInsights,
   fetchMetaPlacementInsights,
   fetchMetaGeoInsights,
@@ -242,6 +243,68 @@ export async function POST(req: NextRequest) {
     else totalSynced += geoRes.value
     if (hourlyRes.status === 'rejected') console.error('hourly sync error:', hourlyRes.reason)
     else totalSynced += hourlyRes.value
+
+    // --- Ad-level insights sync (level=ad, stored in meta_ad_insights) ---
+    try {
+      const adRows = await fetchMetaAdInsights(accountId, dateFrom, dateTo)
+      if (adRows.length > 0) {
+        const adRecords = adRows
+          .map((row) => {
+            const spend = parseFloat(row.spend) || 0
+            const results = extractResults(row.actions)
+            const costPerResult = results > 0 ? spend / results : 0
+
+            const campaignName = String(row.campaign_name ?? '').trim()
+            const adsetName = String(row.adset_name ?? '').trim()
+            const adName = String(row.ad_name ?? '').trim()
+            const adId = String(row.ad_id ?? '').trim()
+
+            if (!campaignName || !adsetName || !adName || !adId) return null
+
+            return {
+              account_id: accountId,
+              campaign_id: row.campaign_id || null,
+              campaign_name: campaignName,
+              adset_id: row.adset_id || null,
+              adset_name: adsetName,
+              ad_id: adId,
+              ad_name: adName,
+              date: row.date_start,
+              spend,
+              impressions: parseInt(row.impressions) || 0,
+              clicks: parseInt(row.clicks) || 0,
+              results,
+              cost_per_result: costPerResult,
+              cpm: parseFloat(row.cpm) || 0,
+              cpc: parseFloat(row.cpc) || 0,
+              ctr: parseFloat(row.ctr) || 0,
+              reach: parseInt(row.reach ?? '', 10) || 0,
+              frequency: parseFloat(row.frequency ?? '') || 0,
+              video_p25_watched: extractActionValue(row.video_p25_watched_actions),
+              video_p50_watched: extractActionValue(row.video_p50_watched_actions),
+              video_p75_watched: extractActionValue(row.video_p75_watched_actions),
+              video_p100_watched: extractActionValue(row.video_p100_watched_actions),
+              video_thruplay: extractActionValue(row.video_thruplay_watched_actions),
+              account_currency: row.account_currency || 'USD',
+              fetched_at: new Date().toISOString(),
+            }
+          })
+          .filter(Boolean)
+
+        if (adRecords.length > 0) {
+          const { error: adError, count: adCount } = await supabaseAdmin
+            .from('meta_ad_insights')
+            .upsert(adRecords, {
+              onConflict: 'account_id,ad_id,date',
+              count: 'exact',
+            })
+          if (adError) console.error('ad insights sync error:', adError)
+          else totalSynced += adCount ?? adRecords.length
+        }
+      }
+    } catch (adErr) {
+      console.error('Ad insights sync error (other syncs succeeded):', adErr)
+    }
 
     return NextResponse.json({ success: true, rows_synced: totalSynced })
   } catch (err) {

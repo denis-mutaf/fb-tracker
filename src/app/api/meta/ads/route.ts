@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { fetchMetaAds, fetchMetaAdInsights } from '@/lib/meta-api'
+import { fetchMetaAds, fetchMetaAdInsightsByAdId } from '@/lib/meta-api'
 
 /**
  * GET /api/meta/ads?adsetId=xxx&accountId=xxx&dateFrom=xxx&dateTo=xxx
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
         let ctr = 0
         let cpc = 0
         try {
-          const insights = await fetchMetaAdInsights(ad.id, dateFrom, dateTo)
+          const insights = await fetchMetaAdInsightsByAdId(ad.id, dateFrom, dateTo)
           for (const row of insights) {
             spend += parseFloat(row.spend) || 0
             impressions += parseInt(row.impressions, 10) || 0

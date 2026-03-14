@@ -6,6 +6,10 @@ const ACCESS_TOKEN = process.env.META_ACCESS_TOKEN!
 export interface MetaInsightRow {
   campaign_id: string
   campaign_name: string
+  adset_id?: string
+  adset_name?: string
+  ad_id?: string
+  ad_name?: string
   date_start: string
   spend: string
   impressions: string
@@ -106,6 +110,59 @@ export async function fetchMetaInsights(
     if (nextUrl) {
       await sleep(300)
     }
+  }
+
+  return allRows
+}
+
+/**
+ * Fetch ad-level insights for an account (level=ad, time_increment=1).
+ * Returned rows include campaign/adset/ad identifiers and names.
+ */
+export async function fetchMetaAdInsights(
+  accountId: string,
+  dateFrom?: string,
+  dateTo?: string
+): Promise<MetaInsightRow[]> {
+  const today = new Date()
+  const since = dateFrom || format(subDays(today, 7), 'yyyy-MM-dd')
+  const until = dateTo || format(today, 'yyyy-MM-dd')
+
+  const fields = [
+    'campaign_name',
+    'campaign_id',
+    'adset_name',
+    'adset_id',
+    'ad_name',
+    'ad_id',
+    'spend',
+    'impressions',
+    'clicks',
+    'cpm',
+    'cpc',
+    'ctr',
+    'account_currency',
+    'actions',
+    'reach',
+    'frequency',
+    'video_p25_watched_actions',
+    'video_p50_watched_actions',
+    'video_p75_watched_actions',
+    'video_p100_watched_actions',
+    'video_thruplay_watched_actions',
+  ].join(',')
+
+  const timeRange = JSON.stringify({ since, until })
+  const baseUrl = `${META_GRAPH_URL}/${accountId}/insights?fields=${fields}&time_range=${encodeURIComponent(timeRange)}&level=ad&time_increment=1&access_token=${ACCESS_TOKEN}`
+
+  const allRows: MetaInsightRow[] = []
+  let nextUrl: string | undefined = baseUrl
+
+  while (nextUrl) {
+    const data = await fetchWithRetry(nextUrl)
+    allRows.push(...data.data)
+    nextUrl = data.paging?.next
+    if (nextUrl) await sleep(300)
   }
 
   return allRows
@@ -413,7 +470,11 @@ export interface MetaAdInsightsResponse {
   data: MetaAdInsightRow[]
 }
 
-export async function fetchMetaAdInsights(
+/**
+ * Fetch per-ad daily insights by ad id (Meta Graph: /{adId}/insights).
+ * Used for lightweight "ads list" metrics (not stored).
+ */
+export async function fetchMetaAdInsightsByAdId(
   adId: string,
   dateFrom?: string,
   dateTo?: string

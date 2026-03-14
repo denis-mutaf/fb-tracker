@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
       demographicRes,
       placementRes,
       geoRes,
+      adInsightsRes,
     ] = await Promise.all([
       supabaseAdmin
         .from('meta_campaign_insights')
@@ -59,6 +60,14 @@ export async function POST(req: NextRequest) {
         .lte('date', dateTo)
         .order('spend', { ascending: false })
         .limit(10),
+      supabaseAdmin
+        .from('meta_ad_insights')
+        .select('*')
+        .eq('account_id', accountId)
+        .gte('date', dateFrom)
+        .lte('date', dateTo)
+        .order('spend', { ascending: false })
+        .limit(20),
     ])
 
     const systemPrompt = `Ты — AI-ассистент для анализа рекламных кампаний Meta (Facebook/Instagram Ads).
@@ -81,6 +90,9 @@ ${JSON.stringify(placementRes.data || [], null, 2)}
 
 ГЕОГРАФИЯ (топ 10):
 ${JSON.stringify(geoRes.data || [], null, 2)}
+
+ОБЪЯВЛЕНИЯ (ad-level инсайты, топ 20 по расходу):
+${JSON.stringify(adInsightsRes.data || [], null, 2)}
 
 При анализе учитывай демографию (какой возраст/пол конвертирует лучше), плейсменты (какая платформа эффективнее), географию (откуда приходят результаты), и частоту показов (frequency > 3.0 = выгорание аудитории).
 

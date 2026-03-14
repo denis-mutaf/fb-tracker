@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
       demographicsRes,
       placementsRes,
       geoRes,
+      adInsightsRes,
     ] = await Promise.all([
       supabaseAdmin
         .from('meta_campaign_insights')
@@ -81,6 +82,14 @@ export async function POST(req: NextRequest) {
         .lte('date', dateTo)
         .order('spend', { ascending: false })
         .limit(10),
+      supabaseAdmin
+        .from('meta_ad_insights')
+        .select('*')
+        .eq('account_id', accountId)
+        .gte('date', dateFrom)
+        .lte('date', dateTo)
+        .order('spend', { ascending: false })
+        .limit(20),
     ])
 
     const insights: CampaignInsight[] = insightsRes.data || []
@@ -89,6 +98,7 @@ export async function POST(req: NextRequest) {
     const topDemographics = demographicsRes.data || []
     const placementData = placementsRes.data || []
     const topGeo = geoRes.data || []
+    const topAds = adInsightsRes.data || []
 
     const prompt = `Ты — AI-аналитик рекламных кампаний Meta (Facebook/Instagram Ads).
 
@@ -111,6 +121,9 @@ ${JSON.stringify(placementData, null, 2)}
 
 ГЕОГРАФИЯ (топ 10 стран):
 ${JSON.stringify(topGeo, null, 2)}
+
+ОБЪЯВЛЕНИЯ (ad-level инсайты, топ 20 по расходу):
+${JSON.stringify(topAds, null, 2)}
 
 Задача:
 1. Проанализируй данные за период
