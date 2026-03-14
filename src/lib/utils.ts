@@ -31,3 +31,31 @@ export function isMetricBetter(metric: string, change: number): boolean {
   const lowerIsBetter = ['cost_per_result', 'cpm', 'cpc', 'spend']
   return lowerIsBetter.includes(metric) ? change < 0 : change > 0
 }
+
+/**
+ * Human-readable label for Meta placement (publisher_platform + platform_position).
+ */
+export function formatPlacement(platform: string, position: string): string {
+  const map: Record<string, string> = {
+    'facebook/feed': 'Facebook Feed',
+    'facebook/right_hand_column': 'Facebook Sidebar',
+    'facebook/marketplace': 'Facebook Marketplace',
+    'facebook/video_feeds': 'Facebook Video Feed',
+    'facebook/story': 'Facebook Stories',
+    'facebook/search': 'Facebook Search',
+    'instagram/feed': 'Instagram Feed',
+    'instagram/story': 'Instagram Stories',
+    'instagram/explore': 'Instagram Explore',
+    'instagram/explore_grid_home': 'Instagram Explore Grid',
+    'instagram/instagram_explore_grid_home': 'Instagram Explore Grid',
+    'instagram/reels': 'Instagram Reels',
+    'instagram/instagram_reels': 'Instagram Reels',
+    'instagram/profile_feed': 'Instagram Profile',
+    'audience_network/classic': 'Audience Network',
+    'audience_network/rewarded_video': 'Audience Network Video',
+    'messenger/messenger_home': 'Messenger',
+    'messenger/story': 'Messenger Stories',
+  }
+  const key = `${platform}/${position}`.toLowerCase()
+  return map[key] || `${platform} / ${position.replace(/_/g, ' ')}`
+}

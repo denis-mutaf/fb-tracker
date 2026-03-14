@@ -61,7 +61,7 @@ export function AiInsightsBlock({ dateFrom, dateTo }: AiInsightsBlockProps) {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-white">AI Аналитика</h3>
-            <p className="text-xs text-slate-500">GPT-4o анализ кампаний</p>
+            <p className="text-xs text-slate-500">Claude анализ кампаний</p>
           </div>
         </div>
         <button
@@ -121,7 +121,7 @@ export function AiInsightsBlock({ dateFrom, dateTo }: AiInsightsBlockProps) {
             animate={{ opacity: 1 }}
             className="flex flex-col items-center justify-center py-8">
             <div className="w-8 h-8 rounded-full border-2 border-purple-500/30 border-t-purple-500 spin-slow mb-3" />
-            <p className="text-slate-500 text-sm">GPT-4o анализирует данные...</p>
+            <p className="text-slate-500 text-sm">Claude анализирует данные...</p>
           </motion.div>
         )}
 

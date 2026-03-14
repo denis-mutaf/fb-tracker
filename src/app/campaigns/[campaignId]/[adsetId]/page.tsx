@@ -26,7 +26,7 @@ import { Header } from '@/components/layout/header'
 import { DateRangePicker } from '@/components/dashboard/date-range-picker'
 import { CampaignsBreadcrumbs } from '@/components/campaigns/breadcrumbs'
 import { useAccountStore } from '@/hooks/use-account'
-import { formatCurrency, formatNumber, formatPercent, cn } from '@/lib/utils'
+import { formatCurrency, formatNumber, formatPercent, formatPlacement, cn } from '@/lib/utils'
 
 const tooltipStyle = {
   backgroundColor: '#1a1a26',
@@ -645,7 +645,11 @@ function BreakdownCharts({ data, type }: { data: Record<string, unknown>[]; type
       acc[key] = (acc[key] || 0) + Number(r.spend ?? 0)
       return acc
     }, {})
-    const chartData = Object.entries(byPlace).map(([name, spend]) => ({ name: name.length > 25 ? name.slice(0, 25) + '…' : name, spend: Math.round(spend * 100) / 100 })).sort((a, b) => b.spend - a.spend).slice(0, 10)
+    const chartData = Object.entries(byPlace).map(([key, spend]) => {
+      const [p, pos] = key.split(' / ')
+      const label = key === 'unknown' ? 'Неизвестно' : formatPlacement(p ?? '', pos ?? '')
+      return { name: label.length > 25 ? label.slice(0, 25) + '…' : label, spend: Math.round(spend * 100) / 100 }
+    }).sort((a, b) => b.spend - a.spend).slice(0, 10)
     return (
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={chartData} layout="vertical" margin={{ left: 80 }}>
