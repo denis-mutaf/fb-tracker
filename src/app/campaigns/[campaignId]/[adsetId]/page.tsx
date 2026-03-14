@@ -728,7 +728,6 @@ function AdRow({
         <span className="whitespace-nowrap">CPC {formatCurrency(ad.cpc)}</span>
       </div>
       <button
-        onClick={onPreview}
         onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation()
